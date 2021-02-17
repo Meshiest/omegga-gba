@@ -1,0 +1,14 @@
+{
+  "name": "gba",
+  "description": "GBA emulaotr",
+  "author": "cake",
+  "config": {},
+  "commands": [
+    {
+      "name": "!gba",
+      "description": "Start GBA",
+      "example": "!gba",
+      "args": []
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "name": "omegga-gba",
+  "version": "1.0.0",
+  "description": "GBA runner for omegga",
+  "main": "omegga.plugin.js",
+  "scripts": {
+    "test": "omegga"
+  },
+  "author": "cake",
+  "license": "ISC",
+  "dependencies": {
+    "gbajs": "^1.1.2"
+  }
+}
