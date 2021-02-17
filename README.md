@@ -4,6 +4,8 @@ This [omegga](https://github.com/brickadia-community/omegga) plugin runs GBA rom
 
 To use:
 
+Install: `omegga install gh:Meshiest/gba`
+
 1. Copy some gba roms to the `rom` folder
 2. Type `!gba` in chat
 3. Type the name of the rom (without extension) into chat
