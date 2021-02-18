@@ -9,6 +9,28 @@
       "description": "Start GBA",
       "example": "!gba",
       "args": []
-    }
+    },
+    {
+      "name": "!downscale",
+      "description": "Toggle downscaling of the rendered image",
+      "example": "!downscale 2",
+      "args": [{
+        "name": "amount",
+        "description": "When no number is provided, toggles downscaling. Otherwise, can downscale by 2, 4, or 8x.",
+        "required": false
+      }]
+    },
+    {
+      "name": "!pause",
+      "description": "Toggle rendering, does not pause emulator",
+      "example": "!pause",
+      "args": []
+    },
+    {
+      "name": "!slow",
+      "description": "Toggle slow mode",
+      "example": "!slow",
+      "args": []
+    },
   ]
 }

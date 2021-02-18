@@ -15,7 +15,7 @@ const SCREEN_WIDTH = 240;
 const SCREEN_HEIGHT = 160;
 const PIXEL_SIZE = 1;
 const FRAME_TIME = 200;
-const FRAME_BUFFER = 4;
+const FRAME_BUFFER = 3;
 
 const OWNERS = [{
   id: 'c4f9159c-2a1a-3131-b10e-296e950fe7f6',
@@ -47,6 +47,9 @@ module.exports = class GBA {
     this.totalFrames = 0;
     this.side = 0;
     this.rendering = false;
+    this.downscale = false;
+    this.downscaleAmount = 4;
+    this.lastPixels = Array(SCREEN_WIDTH * SCREEN_HEIGHT * 3).fill(0);
   }
 
   // create a gameboy
@@ -122,10 +125,46 @@ module.exports = class GBA {
   async screenshot() {
     this.frames = this.frames % FRAME_BUFFER;
     // save the screenshot to file
+    let change = false;
     await new Promise(resolve => {
       const png = this.gba.screenshot();
+      if (this.downscale) {
+
+        // downscale the image
+        for (let x = 0; x < SCREEN_WIDTH; x+=this.downscaleAmount) {
+          for (let y = 0; y < SCREEN_HEIGHT; y+=this.downscaleAmount) {
+            const firstIndex = (x + y * SCREEN_WIDTH)*4;
+            for (let sx = 0; sx < this.downscaleAmount; sx++) {
+              for (let sy = 0; sy < this.downscaleAmount; sy++) {
+                if (sx + x >= SCREEN_WIDTH || sy + y >= SCREEN_HEIGHT) continue;
+                const index = (x + sx + (y + sy) * SCREEN_WIDTH) * 4;
+                png.data[index] = png.data[firstIndex];
+                png.data[index+1] = png.data[firstIndex+1];
+                png.data[index+2] = png.data[firstIndex+2];
+              }
+            }
+          }
+        }
+      }
+      for (let i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; i++) {
+        if (this.frame !== 0 && this.lastPixels[i * 3] === png.data[i * 4] &&
+          this.lastPixels[i * 3 + 1] === png.data[i * 4 + 1] &&
+          this.lastPixels[i * 3 + 2] === png.data[i * 4 + 2]) {
+          // this was used to detect repeated pixels
+          // but it turns out this doesn't work very well with stacked frames
+          // maybe it would be better to count how many times this pixel was repeated
+          // and just render it as a background and clear what's above it instead.
+        } else {
+          this.lastPixels[i * 3] = png.data[i * 4];
+          this.lastPixels[i * 3 + 1] = png.data[i * 4 + 1];
+          this.lastPixels[i * 3 + 2] = png.data[i * 4 + 2];
+          change = true;
+        }
+      }
       png.pack().pipe(fs.createWriteStream(IMAGE_PATH)).on('finish', resolve);
     });
+
+    if (!change) return;
 
     // generate and lad the save
     const frameSave = TEMP_SAVE_FILE + this.frame + '.brs';
@@ -162,9 +201,9 @@ module.exports = class GBA {
         console.log('frame err');
       }
 
-      this.renderTimeout = setTimeout(renderLoop, FRAME_TIME);
+      this.renderTimeout = setTimeout(renderLoop, this.slowMode ? 500 : FRAME_TIME);
     };
-    this.renderTimeout = setTimeout(renderLoop, FRAME_TIME);
+    this.renderTimeout = setTimeout(renderLoop, this.slowMode ? 500 : FRAME_TIME);
 
     Omegga
       .on('chatcmd:gba', async name => {
@@ -212,6 +251,26 @@ module.exports = class GBA {
           await this.screenshot();
         } catch (err) {
           console.error(err);
+        }
+      })
+      .on('chatcmd:pause', name => {
+        if (name !== host) return;
+        this.rendering = !this.rendering;
+        send('Rendering ' + (this.rendering ? 'enabled' : 'disabled'));
+      })
+      .on('chatcmd:slow', name => {
+        if (name !== host) return;
+        this.slowMode = !this.slowMode;
+        send('Slow Mode ' + (this.slowMode ? 'enabled' : 'disabled'));
+      })
+      .on('chatcmd:downscale', (name, arg) => {
+        if (name !== host) return;
+        if (arg && arg.length > 0 && arg.match(/^(2|4|8)$/)) {
+          this.downscaleAmount = parseInt(arg);
+          this.downscale = true;
+        } else {
+          this.downscale = !this.downscale;
+          send('Downscale ' + (this.downscale ? 'enabled' : 'disabled'));
         }
       })
       // chat messages parsed for keys and prompts

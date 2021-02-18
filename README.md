@@ -15,3 +15,11 @@ Install: `omegga install gh:Meshiest/gba`
 The only way to stop it is to restart the plugin at the moment.
 
 Not every rom works, be sure to check console for errors.
+
+## Commands
+
+* `!gba` - start wizard (it will ask you to type the game, idk why i didn't just make that an argument)
+* `!downscale` - toggle downscaling
+* `!downscale 2|4|8` - set downscale amount to 2x, 4x, or 8x
+* `!pause` - toggle rendering, doesn't pause the game
+* `!slow` - render at 0.5fps
