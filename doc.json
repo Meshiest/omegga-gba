@@ -31,6 +31,6 @@
       "description": "Toggle slow mode",
       "example": "!slow",
       "args": []
-    },
+    }
   ]
 }
