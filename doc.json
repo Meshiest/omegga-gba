@@ -7,8 +7,16 @@
     {
       "name": "!gba",
       "description": "Start GBA",
-      "example": "!gba",
-      "args": []
+      "example": "!gba romName saveName",
+      "args": [{
+        "name": "romName",
+        "description": "the name of the file (without extension) in the roms folder",
+        "required": true
+      }, {
+        "name": "saveName",
+        "description": "the name of the file (without extension) in the saves folder. by default uses last autosave.",
+        "required": false
+      }]
     },
     {
       "name": "!downscale",
@@ -27,10 +35,42 @@
       "args": []
     },
     {
+      "name": "!snap",
+      "description": "Toggle color palette snapping. Uses server palette as of plugin load time",
+      "example": "!snap",
+      "args": []
+    },
+    {
       "name": "!slow",
       "description": "Toggle slow mode",
       "example": "!slow",
       "args": []
+    },
+    {
+      "name": "!physical",
+      "description": "Toggle phyiscal gamepad",
+      "example": "!physical",
+      "args": []
+    },
+    {
+      "name": "!setbutton",
+      "description": "Set a button to be located where the clipboard selection is located",
+      "example": "!setbutton a",
+      "args": [{
+        "name": "button",
+        "description": "the button to assign (one of a, b, l, r, up, down, left, right, select, start)",
+        "required": true
+      }]
+    },
+    {
+      "name": "!gbasave",
+      "description": "Create a named save file",
+      "example": "!gbasave foo",
+      "args": [{
+        "name": "saveName",
+        "description": "The name of the save (used in !gba romName saveName)",
+        "required": true
+      }]
     }
   ]
 }

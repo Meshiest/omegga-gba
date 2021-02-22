@@ -38,6 +38,54 @@ const KEYS = {
   L: 9,
 };
 
+// distance between two colors
+function colorDifference([r1, g1, b1], [r2, g2, b2]) {
+  return (
+    (r1 - r2) * (r1 - r2) +
+    (g1 - g2) * (g1 - g2) +
+    (b1 - b2) * (b1 - b2)
+  );
+}
+
+let palette = [[255,255,255]];
+const cache = {};
+function snapColors(pixels) {
+  // iterate through pixels
+  for (let y = 0, i = 0; y < SCREEN_HEIGHT; y++) {
+    for (let x = 0; x < SCREEN_WIDTH; x++, i+=4) {
+      // get the currnet color
+      const color = [pixels[i], pixels[i+1], pixels[i+2]];
+      // use a cached color if we haven't calculated the closest color for this pixel yet
+      if (!cache[color]) {
+        // find the closest color to the selected one
+        let closest = palette[0];
+        let dist = colorDifference(closest, color);
+        for (let j = 0; j < palette.length; j++) {
+          const dist2 = colorDifference(palette[j], color);
+          if (dist > dist2) {
+            closest = palette[j];
+            dist = dist2;
+          }
+        }
+        cache[color] = closest;
+      }
+
+      // update the image data for the canvas
+      pixels[i] = cache[color][0];
+      pixels[i+1] = cache[color][1];
+      pixels[i+2] = cache[color][2];
+    }
+  }
+}
+
+const sRGB = linear =>
+  linear.map((c, i) => i === 3
+    ? c
+    : Math.round(((c/255) > 0.0031308
+      ? 1.055 * Math.pow((c/255), 1/2.4) - 0.055
+      : c / 255 * 12.92)*255)
+  );
+
 module.exports = class GBA {
   constructor(omegga, config, store) {
     this.omegga = omegga;
@@ -48,8 +96,11 @@ module.exports = class GBA {
     this.side = 0;
     this.rendering = false;
     this.downscale = false;
+    this.snap = false;
     this.downscaleAmount = 4;
     this.lastPixels = Array(SCREEN_WIDTH * SCREEN_HEIGHT * 3).fill(0);
+    this.gamepad = {};
+    this.physicalGamepad = true;
   }
 
   // create a gameboy
@@ -122,6 +173,18 @@ module.exports = class GBA {
     }
   }
 
+  // create a save
+  save(sav) {
+    const sram = this.gba.mmu.save;
+    if (!sram) return false;
+    try {
+      fs.writeFileSync(path.join(SAVES_PATH, sav + '.sav'), Buffer.from(sram.buffer));
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
   async screenshot() {
     this.frames = this.frames % FRAME_BUFFER;
     // save the screenshot to file
@@ -146,6 +209,10 @@ module.exports = class GBA {
           }
         }
       }
+
+      if (this.snap)
+        snapColors(png.data);
+
       for (let i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; i++) {
         if (this.frame !== 0 && this.lastPixels[i * 3] === png.data[i * 4] &&
           this.lastPixels[i * 3 + 1] === png.data[i * 4 + 1] &&
@@ -169,7 +236,8 @@ module.exports = class GBA {
     // generate and lad the save
     const frameSave = TEMP_SAVE_FILE + this.frame + '.brs';
     await this.runHeightmap(IMAGE_PATH, path.join(this.omegga.savePath, frameSave), {micro: true, owner: OWNERS[this.frames >= FRAME_BUFFER/2 ? 1 : 0]});
-    await this.omegga.loadBricks(frameSave, {offX: 0, offY: 0, offZ: this.frames * PIXEL_SIZE * 2, quiet: true});
+    //await this.omegga.loadBricks(frameSave, {offX: 0, offY: 0, offZ: this.frames * PIXEL_SIZE * 2, quiet: true});
+    this.omegga.writeln(`Bricks.Load "${frameSave}" 0 0 ${this.frames * PIXEL_SIZE * 2} 1 ${this.snap ? '1 1' : ''}`);
 
     // if half of the buffer used, clear the other half
     if (this.frames > FRAME_BUFFER/2)
@@ -184,12 +252,24 @@ module.exports = class GBA {
 
 
   async init() {
-    let host = '', go = false;
-    const yesNo = async () => (await this.prompt(/^(y(es)?|no?)$/i)).toLowerCase().startsWith('y');
+    const settingsPath = path.join(Omegga.path, 'data/Saved/Config/LinuxServer/ServerSettings.ini');
+    const serverSettings = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath).toString() : '';
+    const match = serverSettings.match(/SavedServerPalettes=\(Groups=\((.+)\),Description=.*\)\n\n/);
+    if (match) {
+      palette = match[1]
+        .match(/B=(\d+),G=(\d+),R=(\d+)/g)
+        .map(s =>{
+          const [,b,g,r]=s.match(/B=(\d+),G=(\d+),R=(\d+)/);return sRGB([+r,+g,+b]);
+        });
+      console.log('Scanned', palette.length, 'colors from server palette');
+    }
+    let host = Omegga.host && Omegga.host.name, go = false;
     const prefix = '<color=\\"999999\\">[<color=\\"99ff99\\">gba</>]</>';
     const send = msg => Omegga.broadcast(`"${prefix} ${msg}"`);
     Omegga.clearBricks(OWNERS[0], true);
     Omegga.clearBricks(OWNERS[1], true);
+    this.gamepad = (await this.store.get('buttons')) || {};
+    console.info('Physical gamepad has', Object.keys(this.gamepad).length, 'buttons');
 
     // render as fast as possible
     let renderLoop;
@@ -205,58 +285,130 @@ module.exports = class GBA {
     };
     this.renderTimeout = setTimeout(renderLoop, this.slowMode ? 500 : FRAME_TIME);
 
-    Omegga
-      .on('chatcmd:gba', async name => {
-        if (!Omegga.getPlayer(name).isHost() || go) return;
-        host = name;
-        go = true;
-        if (this.gba) return send('Emulator already created');
-        // attempt to load rom
-        for(;;) {
-          send('Enter rom name or \\"stop\\"');
-          const name = await this.prompt(/.*/);
-          if (name === 'stop') {
-            send('Cancel? yes/no');
-            if (await yesNo()) {
-              go = false;
-              this.gba = undefined;
-              return;
-            }
-            else
-              continue;
+
+    const crouchedRegExp = /(?<index>\d+)\) BP_FigureV2_C .+?PersistentLevel\.(?<pawn>BP_FigureV2_C_\d+)\.bIsCrouched = (?<crouched>(True|False))$/;
+
+    // handle physical input
+    setInterval(async () => {
+      try {
+
+        if (!this.gba || !this.physicalGamepad) return;
+        // set of pressed buttons
+        let pressed = new Set();
+        if (this.rendering && Object.keys(this.gamepad).length > 4) {
+          // get player positions
+          const [positions, crouched] = await Promise.all([
+            Omegga.getAllPlayerPositions(),
+            Omegga.watchLogChunk('GetAll BP_FigureV2_C bIsCrouched', crouchedRegExp, {first: 'index'}),
+          ]);
+
+
+          for (const p of positions) {
+            const isCrouched = crouched.find(r => r.groups.pawn === p.pawn);
+            p.isCrouched = isCrouched && isCrouched.groups.crouched === 'True';
           }
-          try {
-            this.createEmulator();
-            await this.loadRom(name);
-            send('Created emulator');
-            break;
-          } catch (err) {
-            go = false;
-            send('Error: ' + err);
+
+
+          // determine if any buttons are pressed
+          for (const key in this.gamepad) {
+            const {minBound, maxBound} = this.gamepad[key];
+            if (positions.some(({pos, isCrouched}) =>
+              minBound[0] < pos[0] && maxBound[0] > pos[0] &&
+              minBound[1] < pos[1] && maxBound[1] > pos[1] &&
+              maxBound[2] + 50 > pos[2] && isCrouched)) {
+              pressed.add(key);
+            }
           }
         }
+        for (const key in KEYS) {
+          if (pressed.has(key))
+            this.gba.keypad.keydown(KEYS[key]);
+          else
+            this.gba.keypad.keyup(KEYS[key]);
+        }
+      } catch (err) {
+        console.error('error getting positions', err);
+      }
+    }, 200);
 
-        /*send('Load save?');
-        if(await yesNo()) {
-          // load save.. not implemented yet
-        }*/
+    // autosave every 30 seconds
+    setInterval(() => {
+      if (go) {
+        this.save('_autosave');
+      }
+    }, 30000);
+
+    Omegga
+      .on('chatcmd:gba', async (name, rom, save) => {
+        if (!Omegga.getPlayer(name).isHost()) return;
+        host = name;
+        try {
+          if (this.gba)
+            this.gba.reset();
+          else
+            this.createEmulator();
+          await this.loadRom(rom);
+          send('Created emulator');
+        } catch (err) {
+          send('Error creating emulator: ' + err);
+          return;
+        }
+
+        try {
+          const saveFile = path.join(SAVES_PATH, (save || '_autosave') + '.sav');
+          if (fs.existsSync(saveFile))
+            this.gba.loadSavedataFromFile(saveFile);
+        } catch (err) {
+          send('Error loading save: ' + err.message);
+          console.error('Error loading save', err);
+          return;
+        }
 
         this.gba.runStable();
+        go = true;
         this.rendering = true;
       })
-      // individual frames
-      .on('chatcmd:shot', async name => {
+      // set the position of a button to be located at template bounds
+      .on('chatcmd:setbutton', async (name, btn) => {
         if (name !== host) return;
+        const bounds = await Omegga.getPlayer(name).getTemplateBounds();
+        if (!bounds) return send('No bricks in clipboard');
+        if (!btn) return send('Invalid button');
+        btn = btn.toUpperCase();
+        if (typeof KEYS[btn] === 'undefined') return send('Invalid button');
+        send(`${btn}: ${bounds.maxBound[0] - bounds.minBound[0]}x${bounds.maxBound[1] - bounds.minBound[1]}`);
+        this.gamepad[btn] = bounds;
+        await this.store.set('buttons', this.gamepad);
+      })
+      // save game to a file
+      .on('chatcmd:gbasave', (name, sav) => {
+        if (name !== host) return;
+        if (!sav || !sav.length) return send ('Invalid save name');
+        const sram = this.gba.mmu.save;
+        if (!sram) return send('No save data available');
         try {
-          await this.screenshot();
+          fs.writeFileSync(path.join(SAVES_PATH, sav + '.sav'), Buffer.from(sram.buffer));
         } catch (err) {
-          console.error(err);
+          send('Error: ' + err.message);
+          console.error('error saving', err);
+          return;
         }
+        send('Saved data to ' + sav);
       })
       .on('chatcmd:pause', name => {
         if (name !== host) return;
         this.rendering = !this.rendering;
         send('Rendering ' + (this.rendering ? 'enabled' : 'disabled'));
+      })
+      .on('chatcmd:snap', name => {
+        if (name !== host) return;
+        this.snap = !this.snap;
+        send('Palette snapping ' + (this.snap ? 'enabled' : 'disabled'));
+      })
+      .on('chatcmd:physical', name => {
+        if (name !== host) return;
+        this.physicalGamepad = !this.physicalGamepad;
+        send('Physical Gamepad ' + (this.physicalGamepad ? 'enabled' : 'disabled'));
       })
       .on('chatcmd:slow', name => {
         if (name !== host) return;
