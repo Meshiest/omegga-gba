@@ -15,7 +15,6 @@ const SCREEN_WIDTH = 240;
 const SCREEN_HEIGHT = 160;
 const PIXEL_SIZE = 1;
 const FRAME_TIME = 200;
-const FRAME_BUFFER = 3;
 
 const OWNERS = [{
   id: 'c4f9159c-2a1a-3131-b10e-296e950fe7f6',
@@ -153,7 +152,7 @@ module.exports = class GBA {
   async runHeightmap(filename, destpath, {tile=false,micro=false,owner}={}) {
     try {
       const command = HEIGHTMAP_BIN +
-        ` -o "${destpath}" --cull --owner_id "${owner.id}" --owner "${owner.name}" -s ${PIXEL_SIZE} -v 1 --img "${filename}"${
+        ` -o "${destpath}" --nocollide --cull --owner_id "${owner.id}" --owner "${owner.name}" -s ${PIXEL_SIZE} -v 1 --img "${filename}"${
           tile?' --tile':micro?' --micro':''
         }`;
       if (Omegga.verbose) console.info(command);
@@ -186,7 +185,7 @@ module.exports = class GBA {
   }
 
   async screenshot() {
-    this.frames = this.frames % FRAME_BUFFER;
+    const owner = OWNERS[this.frames % 2];
     // save the screenshot to file
     let change = false;
     await new Promise(resolve => {
@@ -234,16 +233,13 @@ module.exports = class GBA {
     if (!change) return;
 
     // generate and lad the save
-    const frameSave = TEMP_SAVE_FILE + this.frame + '.brs';
-    await this.runHeightmap(IMAGE_PATH, path.join(this.omegga.savePath, frameSave), {micro: true, owner: OWNERS[this.frames >= FRAME_BUFFER/2 ? 1 : 0]});
+    const frameSave = TEMP_SAVE_FILE + (this.frame % 2) + '.brs';
+    await this.runHeightmap(IMAGE_PATH, path.join(this.omegga.savePath, frameSave), {micro: true, owner});
     //await this.omegga.loadBricks(frameSave, {offX: 0, offY: 0, offZ: this.frames * PIXEL_SIZE * 2, quiet: true});
-    this.omegga.writeln(`Bricks.Load "${frameSave}" 0 0 ${this.frames * PIXEL_SIZE * 2} 1 ${this.snap ? '1 1' : ''}`);
+    this.omegga.writeln(`Bricks.Load "${frameSave}" 0 0 ${(this.frames % 2) * PIXEL_SIZE * 2} 1 ${this.snap ? '1 1' : ''}`);
 
     // if half of the buffer used, clear the other half
-    if (this.frames > FRAME_BUFFER/2)
-      Omegga.clearBricks(OWNERS[0], true);
-    else if(this.frames === 0)
-      Omegga.clearBricks(OWNERS[1], true);
+    Omegga.clearBricks(OWNERS[1 - this.frames % 2], true);
 
     // increment the frames
     this.frames ++;
