@@ -8,25 +8,30 @@
       "name": "!gba",
       "description": "Start GBA",
       "example": "!gba romName saveName",
-      "args": [{
-        "name": "romName",
-        "description": "the name of the file (without extension) in the roms folder",
-        "required": true
-      }, {
-        "name": "saveName",
-        "description": "the name of the file (without extension) in the saves folder. by default uses last autosave.",
-        "required": false
-      }]
+      "args": [
+        {
+          "name": "romName",
+          "description": "the name of the file (without extension) in the roms folder",
+          "required": true
+        },
+        {
+          "name": "saveName",
+          "description": "the name of the file (without extension) in the saves folder. by default uses last autosave.",
+          "required": false
+        }
+      ]
     },
     {
       "name": "!downscale",
       "description": "Toggle downscaling of the rendered image",
       "example": "!downscale 2",
-      "args": [{
-        "name": "amount",
-        "description": "When no number is provided, toggles downscaling. Otherwise, can downscale by 2, 4, or 8x.",
-        "required": false
-      }]
+      "args": [
+        {
+          "name": "amount",
+          "description": "When no number is provided, toggles downscaling. Otherwise, can downscale by 2, 4, or 8x.",
+          "required": false
+        }
+      ]
     },
     {
       "name": "!pause",
@@ -56,21 +61,31 @@
       "name": "!setbutton",
       "description": "Set a button to be located where the clipboard selection is located",
       "example": "!setbutton a",
-      "args": [{
-        "name": "button",
-        "description": "the button to assign (one of a, b, l, r, up, down, left, right, select, start)",
-        "required": true
-      }]
+      "args": [
+        {
+          "name": "button",
+          "description": "the button to assign (one of a, b, l, r, up, down, left, right, select, start)",
+          "required": true
+        }
+      ]
+    },
+    {
+      "name": "!setscreen",
+      "description": "Set the screen located where the clipboard selection is located (48x32 brick)",
+      "example": "!setscreen",
+      "args": []
     },
     {
       "name": "!gbasave",
       "description": "Create a named save file",
       "example": "!gbasave foo",
-      "args": [{
-        "name": "saveName",
-        "description": "The name of the save (used in !gba romName saveName)",
-        "required": true
-      }]
+      "args": [
+        {
+          "name": "saveName",
+          "description": "The name of the save (used in !gba romName saveName)",
+          "required": true
+        }
+      ]
     }
   ]
 }

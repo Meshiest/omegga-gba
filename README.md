@@ -26,5 +26,6 @@ Not every rom works, be sure to check console for errors.
 * `!slow` - toggle render at 2fps
 * `!snap` - toggle color palette snapping
 * `!setbutton a|b|l|r|up|down|left|right|select|start` - Set a button to be located where the clipboard selection is located
+* `!setscreen` - Set the screen to located where the clipboard selection is located (48x32f brick)
 * `!physical` - toggle access to physical gamepad
 * `!gbasave saveName` - create a save file

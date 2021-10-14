@@ -16,13 +16,16 @@ const SCREEN_HEIGHT = 160;
 const PIXEL_SIZE = 1;
 const FRAME_TIME = 200;
 
-const OWNERS = [{
-  id: 'c4f9159c-2a1a-3131-b10e-296e950fe7f6',
-  name: 'GBA EMU',
-}, {
-  id: 'c4f9159c-2a1a-3131-b10e-296e950fe7f7',
-  name: 'GBA EMU B',
-}];
+const OWNERS = [
+  {
+    id: 'c4f9159c-2a1a-3131-b10e-296e950fe7f6',
+    name: 'GBA EMU',
+  },
+  {
+    id: 'c4f9159c-2a1a-3131-b10e-296e950fe7f7',
+    name: 'GBA EMU B',
+  },
+];
 
 const KEYS = {
   A: 0,
@@ -39,21 +42,17 @@ const KEYS = {
 
 // distance between two colors
 function colorDifference([r1, g1, b1], [r2, g2, b2]) {
-  return (
-    (r1 - r2) * (r1 - r2) +
-    (g1 - g2) * (g1 - g2) +
-    (b1 - b2) * (b1 - b2)
-  );
+  return (r1 - r2) * (r1 - r2) + (g1 - g2) * (g1 - g2) + (b1 - b2) * (b1 - b2);
 }
 
-let palette = [[255,255,255]];
+let palette = [[255, 255, 255]];
 const cache = {};
 function snapColors(pixels) {
   // iterate through pixels
   for (let y = 0, i = 0; y < SCREEN_HEIGHT; y++) {
-    for (let x = 0; x < SCREEN_WIDTH; x++, i+=4) {
+    for (let x = 0; x < SCREEN_WIDTH; x++, i += 4) {
       // get the currnet color
-      const color = [pixels[i], pixels[i+1], pixels[i+2]];
+      const color = [pixels[i], pixels[i + 1], pixels[i + 2]];
       // use a cached color if we haven't calculated the closest color for this pixel yet
       if (!cache[color]) {
         // find the closest color to the selected one
@@ -71,18 +70,21 @@ function snapColors(pixels) {
 
       // update the image data for the canvas
       pixels[i] = cache[color][0];
-      pixels[i+1] = cache[color][1];
-      pixels[i+2] = cache[color][2];
+      pixels[i + 1] = cache[color][1];
+      pixels[i + 2] = cache[color][2];
     }
   }
 }
 
 const sRGB = linear =>
-  linear.map((c, i) => i === 3
-    ? c
-    : Math.round(((c/255) > 0.0031308
-      ? 1.055 * Math.pow((c/255), 1/2.4) - 0.055
-      : c / 255 * 12.92)*255)
+  linear.map((c, i) =>
+    i === 3
+      ? c
+      : Math.round(
+          (c / 255 > 0.0031308
+            ? 1.055 * Math.pow(c / 255, 1 / 2.4) - 0.055
+            : (c / 255) * 12.92) * 255
+        )
   );
 
 module.exports = class GBA {
@@ -105,7 +107,9 @@ module.exports = class GBA {
   // create a gameboy
   createEmulator() {
     const gba = new GameBoyAdvance();
-    const biosBuf = fs.readFileSync(__dirname + '/node_modules/gbajs/resources/bios.bin');
+    const biosBuf = fs.readFileSync(
+      __dirname + '/node_modules/gbajs/resources/bios.bin'
+    );
     gba.setBios(biosBuf);
     gba.setCanvasMemory();
     this.gba = gba;
@@ -145,15 +149,22 @@ module.exports = class GBA {
   async prompt(pattern) {
     this.chatPattern = pattern;
     this.waiting = true;
-    return await new Promise(resolve => this.chatPromise = resolve);
+    return await new Promise(resolve => (this.chatPromise = resolve));
   }
 
   // run the heightmap binary given an input file
-  async runHeightmap(filename, destpath, {tile=false,micro=false,owner}={}) {
+  async runHeightmap(
+    filename,
+    destpath,
+    { tile = false, micro = false, owner } = {}
+  ) {
     try {
-      const command = HEIGHTMAP_BIN +
-        ` -o "${destpath}" --nocollide --cull --owner_id "${owner.id}" --owner "${owner.name}" -s ${PIXEL_SIZE} -v 1 --img "${filename}"${
-          tile?' --tile':micro?' --micro':''
+      const command =
+        HEIGHTMAP_BIN +
+        ` -o "${destpath}" --nocollide --cull --owner_id "${
+          owner.id
+        }" --owner "${owner.name}" -s ${PIXEL_SIZE} -v 1 --img "${filename}"${
+          tile ? ' --tile' : micro ? ' --micro' : ''
         }`;
       if (Omegga.verbose) console.info(command);
       const { stdout } = await exec(command, {});
@@ -177,7 +188,10 @@ module.exports = class GBA {
     const sram = this.gba.mmu.save;
     if (!sram) return false;
     try {
-      fs.writeFileSync(path.join(SAVES_PATH, sav + '.sav'), Buffer.from(sram.buffer));
+      fs.writeFileSync(
+        path.join(SAVES_PATH, sav + '.sav'),
+        Buffer.from(sram.buffer)
+      );
       return true;
     } catch (err) {
       return false;
@@ -191,31 +205,32 @@ module.exports = class GBA {
     await new Promise(resolve => {
       const png = this.gba.screenshot();
       if (this.downscale) {
-
         // downscale the image
-        for (let x = 0; x < SCREEN_WIDTH; x+=this.downscaleAmount) {
-          for (let y = 0; y < SCREEN_HEIGHT; y+=this.downscaleAmount) {
-            const firstIndex = (x + y * SCREEN_WIDTH)*4;
+        for (let x = 0; x < SCREEN_WIDTH; x += this.downscaleAmount) {
+          for (let y = 0; y < SCREEN_HEIGHT; y += this.downscaleAmount) {
+            const firstIndex = (x + y * SCREEN_WIDTH) * 4;
             for (let sx = 0; sx < this.downscaleAmount; sx++) {
               for (let sy = 0; sy < this.downscaleAmount; sy++) {
                 if (sx + x >= SCREEN_WIDTH || sy + y >= SCREEN_HEIGHT) continue;
                 const index = (x + sx + (y + sy) * SCREEN_WIDTH) * 4;
                 png.data[index] = png.data[firstIndex];
-                png.data[index+1] = png.data[firstIndex+1];
-                png.data[index+2] = png.data[firstIndex+2];
+                png.data[index + 1] = png.data[firstIndex + 1];
+                png.data[index + 2] = png.data[firstIndex + 2];
               }
             }
           }
         }
       }
 
-      if (this.snap)
-        snapColors(png.data);
+      if (this.snap) snapColors(png.data);
 
       for (let i = 0; i < SCREEN_WIDTH * SCREEN_HEIGHT; i++) {
-        if (this.frame !== 0 && this.lastPixels[i * 3] === png.data[i * 4] &&
+        if (
+          this.frame !== 0 &&
+          this.lastPixels[i * 3] === png.data[i * 4] &&
           this.lastPixels[i * 3 + 1] === png.data[i * 4 + 1] &&
-          this.lastPixels[i * 3 + 2] === png.data[i * 4 + 2]) {
+          this.lastPixels[i * 3 + 2] === png.data[i * 4 + 2]
+        ) {
           // this was used to detect repeated pixels
           // but it turns out this doesn't work very well with stacked frames
           // maybe it would be better to count how many times this pixel was repeated
@@ -234,60 +249,83 @@ module.exports = class GBA {
 
     // generate and lad the save
     const frameSave = TEMP_SAVE_FILE + (this.frame % 2) + '.brs';
-    await this.runHeightmap(IMAGE_PATH, path.join(this.omegga.savePath, frameSave), {micro: true, owner});
+    await this.runHeightmap(
+      IMAGE_PATH,
+      path.join(this.omegga.savePath, frameSave),
+      { micro: true, owner }
+    );
     //await this.omegga.loadBricks(frameSave, {offX: 0, offY: 0, offZ: this.frames * PIXEL_SIZE * 2, quiet: true});
-    this.omegga.writeln(`Bricks.Load "${frameSave}" 0 0 ${(this.frames % 2) * PIXEL_SIZE * 2} 1 ${this.snap ? '1 1' : ''}`);
+    this.omegga.writeln(
+      `Bricks.Load "${frameSave}" ${this.screen[0]} ${this.screen[1]} ${
+        (this.frames % 2) * PIXEL_SIZE * 2 + this.screen[2]
+      } 1 ${this.snap ? '1 1' : ''}`
+    );
 
     // if half of the buffer used, clear the other half
-    Omegga.clearBricks(OWNERS[1 - this.frames % 2], true);
+    Omegga.clearBricks(OWNERS[1 - (this.frames % 2)], true);
 
     // increment the frames
-    this.frames ++;
-    this.totalFrames ++;
+    this.frames++;
+    this.totalFrames++;
   }
 
-
   async init() {
-    const settingsPath = path.join(Omegga.path, 'data/Saved/Config/LinuxServer/ServerSettings.ini');
-    const serverSettings = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath).toString() : '';
-    const match = serverSettings.match(/SavedServerPalettes=\(Groups=\((.+)\),Description=.*\)\n\n/);
+    const settingsPath = path.join(
+      Omegga.path,
+      'data/Saved/Config/LinuxServer/ServerSettings.ini'
+    );
+    const serverSettings = fs.existsSync(settingsPath)
+      ? fs.readFileSync(settingsPath).toString()
+      : '';
+    const match = serverSettings.match(
+      /SavedServerPalettes=\(Groups=\((.+)\),Description=.*\)\n\n/
+    );
     if (match) {
-      palette = match[1]
-        .match(/B=(\d+),G=(\d+),R=(\d+)/g)
-        .map(s =>{
-          const [,b,g,r]=s.match(/B=(\d+),G=(\d+),R=(\d+)/);return sRGB([+r,+g,+b]);
-        });
+      palette = match[1].match(/B=(\d+),G=(\d+),R=(\d+)/g).map(s => {
+        const [, b, g, r] = s.match(/B=(\d+),G=(\d+),R=(\d+)/);
+        return sRGB([+r, +g, +b]);
+      });
       console.log('Scanned', palette.length, 'colors from server palette');
     }
-    let host = Omegga.host && Omegga.host.name, go = false;
+    let host = Omegga.host && Omegga.host.name,
+      go = false;
     const prefix = '<color=\\"999999\\">[<color=\\"99ff99\\">gba</>]</>';
     const send = msg => Omegga.broadcast(`"${prefix} ${msg}"`);
     Omegga.clearBricks(OWNERS[0], true);
     Omegga.clearBricks(OWNERS[1], true);
     this.gamepad = (await this.store.get('buttons')) || {};
-    console.info('Physical gamepad has', Object.keys(this.gamepad).length, 'buttons');
+    this.screen = (await this.store.get('screen')) || [0, 0, 2];
+    console.info(
+      'Physical gamepad has',
+      Object.keys(this.gamepad).length,
+      'buttons'
+    );
 
     // render as fast as possible
     let renderLoop;
     renderLoop = async () => {
       try {
-        if (this.rendering)
-          await this.screenshot();
+        if (this.rendering) await this.screenshot();
       } catch (err) {
         console.log('frame err');
       }
 
-      this.renderTimeout = setTimeout(renderLoop, this.slowMode ? 500 : FRAME_TIME);
+      this.renderTimeout = setTimeout(
+        renderLoop,
+        this.slowMode ? 500 : FRAME_TIME
+      );
     };
-    this.renderTimeout = setTimeout(renderLoop, this.slowMode ? 500 : FRAME_TIME);
+    this.renderTimeout = setTimeout(
+      renderLoop,
+      this.slowMode ? 500 : FRAME_TIME
+    );
 
-
-    const crouchedRegExp = /(?<index>\d+)\) BP_FigureV2_C .+?PersistentLevel\.(?<pawn>BP_FigureV2_C_\d+)\.bIsCrouched = (?<crouched>(True|False))$/;
+    const crouchedRegExp =
+      /(?<index>\d+)\) BP_FigureV2_C .+?PersistentLevel\.(?<pawn>BP_FigureV2_C_\d+)\.bIsCrouched = (?<crouched>(True|False))$/;
 
     // handle physical input
     setInterval(async () => {
       try {
-
         if (!this.gba || !this.physicalGamepad) return;
         // set of pressed buttons
         let pressed = new Set();
@@ -295,32 +333,39 @@ module.exports = class GBA {
           // get player positions
           const [positions, crouched] = await Promise.all([
             Omegga.getAllPlayerPositions(),
-            Omegga.watchLogChunk('GetAll BP_FigureV2_C bIsCrouched', crouchedRegExp, {first: 'index'}),
+            Omegga.watchLogChunk(
+              'GetAll BP_FigureV2_C bIsCrouched',
+              crouchedRegExp,
+              { first: 'index' }
+            ),
           ]);
-
 
           for (const p of positions) {
             const isCrouched = crouched.find(r => r.groups.pawn === p.pawn);
             p.isCrouched = isCrouched && isCrouched.groups.crouched === 'True';
           }
 
-
           // determine if any buttons are pressed
           for (const key in this.gamepad) {
-            const {minBound, maxBound} = this.gamepad[key];
-            if (positions.some(({pos, isCrouched}) =>
-              minBound[0] < pos[0] && maxBound[0] > pos[0] &&
-              minBound[1] < pos[1] && maxBound[1] > pos[1] &&
-              maxBound[2] + 50 > pos[2] && isCrouched)) {
+            const { minBound, maxBound } = this.gamepad[key];
+            if (
+              positions.some(
+                ({ pos, isCrouched }) =>
+                  minBound[0] < pos[0] &&
+                  maxBound[0] > pos[0] &&
+                  minBound[1] < pos[1] &&
+                  maxBound[1] > pos[1] &&
+                  maxBound[2] + 50 > pos[2] &&
+                  isCrouched
+              )
+            ) {
               pressed.add(key);
             }
           }
         }
         for (const key in KEYS) {
-          if (pressed.has(key))
-            this.gba.keypad.keydown(KEYS[key]);
-          else
-            this.gba.keypad.keyup(KEYS[key]);
+          if (pressed.has(key)) this.gba.keypad.keydown(KEYS[key]);
+          else this.gba.keypad.keyup(KEYS[key]);
         }
       } catch (err) {
         console.error('error getting positions', err);
@@ -334,35 +379,55 @@ module.exports = class GBA {
       }
     }, 30000);
 
-    Omegga
-      .on('chatcmd:gba', async (name, rom, save) => {
-        if (!Omegga.getPlayer(name).isHost()) return;
-        host = name;
-        try {
-          if (this.gba)
-            this.gba.reset();
-          else
-            this.createEmulator();
-          await this.loadRom(rom);
-          send('Created emulator');
-        } catch (err) {
-          send('Error creating emulator: ' + err);
-          return;
-        }
+    Omegga.on('chatcmd:gba', async (name, rom, save) => {
+      if (!Omegga.getPlayer(name).isHost()) return;
+      host = name;
+      try {
+        if (this.gba) this.gba.reset();
+        else this.createEmulator();
+        await this.loadRom(rom);
+        send('Created emulator');
+      } catch (err) {
+        send('Error creating emulator: ' + err);
+        return;
+      }
 
-        try {
-          const saveFile = path.join(SAVES_PATH, (save || '_autosave') + '.sav');
-          if (fs.existsSync(saveFile))
-            this.gba.loadSavedataFromFile(saveFile);
-        } catch (err) {
-          send('Error loading save: ' + err.message);
-          console.error('Error loading save', err);
-          return;
-        }
+      try {
+        const saveFile = path.join(SAVES_PATH, (save || '_autosave') + '.sav');
+        if (fs.existsSync(saveFile)) this.gba.loadSavedataFromFile(saveFile);
+      } catch (err) {
+        send('Error loading save: ' + err.message);
+        console.error('Error loading save', err);
+        return;
+      }
 
-        this.gba.runStable();
-        go = true;
-        this.rendering = true;
+      this.gba.runStable();
+      go = true;
+      this.rendering = true;
+    })
+      // set the position of a button to be located at template bounds
+      .on('chatcmd:setscreen', async name => {
+        if (name !== host) return;
+        const bounds = await Omegga.getPlayer(name).getTemplateBounds();
+        if (!bounds) return send('No bricks in clipboard');
+        if (
+          bounds.maxBound[0] - bounds.minBound[0] !== 480 ||
+          bounds.maxBound[1] - bounds.minBound[1] !== 320 ||
+          bounds.maxBound[2] - bounds.minBound[2] !== 4
+        ) {
+          return send(
+            'Bounds must be 48x32f' +
+              (bounds.maxBound[0] - bounds.minBound[0] !== 320 ||
+                bounds.maxBound[1] - bounds.minBound[1] !== 480)
+              ? ' in the right direction...'
+              : ''
+          );
+        }
+        send(
+          `screen: ${bounds.minBound[0]}, ${bounds.minBound[1]},${bounds.minBound[2]}`
+        );
+        this.screen = bounds.minBound;
+        await this.store.set('screen', bounds.minBound);
       })
       // set the position of a button to be located at template bounds
       .on('chatcmd:setbutton', async (name, btn) => {
@@ -372,18 +437,25 @@ module.exports = class GBA {
         if (!btn) return send('Invalid button');
         btn = btn.toUpperCase();
         if (typeof KEYS[btn] === 'undefined') return send('Invalid button');
-        send(`${btn}: ${bounds.maxBound[0] - bounds.minBound[0]}x${bounds.maxBound[1] - bounds.minBound[1]}`);
+        send(
+          `${btn}: ${bounds.maxBound[0] - bounds.minBound[0]}x${
+            bounds.maxBound[1] - bounds.minBound[1]
+          }`
+        );
         this.gamepad[btn] = bounds;
         await this.store.set('buttons', this.gamepad);
       })
       // save game to a file
       .on('chatcmd:gbasave', (name, sav) => {
         if (name !== host) return;
-        if (!sav || !sav.length) return send ('Invalid save name');
+        if (!sav || !sav.length) return send('Invalid save name');
         const sram = this.gba.mmu.save;
         if (!sram) return send('No save data available');
         try {
-          fs.writeFileSync(path.join(SAVES_PATH, sav + '.sav'), Buffer.from(sram.buffer));
+          fs.writeFileSync(
+            path.join(SAVES_PATH, sav + '.sav'),
+            Buffer.from(sram.buffer)
+          );
         } catch (err) {
           send('Error: ' + err.message);
           console.error('error saving', err);
@@ -404,7 +476,9 @@ module.exports = class GBA {
       .on('chatcmd:physical', name => {
         if (name !== host) return;
         this.physicalGamepad = !this.physicalGamepad;
-        send('Physical Gamepad ' + (this.physicalGamepad ? 'enabled' : 'disabled'));
+        send(
+          'Physical Gamepad ' + (this.physicalGamepad ? 'enabled' : 'disabled')
+        );
       })
       .on('chatcmd:slow', name => {
         if (name !== host) return;
